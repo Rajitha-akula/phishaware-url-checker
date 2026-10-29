@@ -1,0 +1,3 @@
+.\venv\Scripts\python run.py----command that will run the project 
+C:\Users\Rakesh\OneDrive\Desktop\project_fldr----location of project files
+http://127.0.0.1:5000------- address for the project
