@@ -16,6 +16,7 @@ load_dotenv(BASE_DIR / ".env")
 
 class Config:
     """Base application configuration with safe defaults."""
+    BASE_DIR = BASE_DIR
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-secure-key-change-in-production-39a8f7c1")
     DEBUG = os.getenv("FLASK_DEBUG", "True").lower() in ("true", "1", "yes")
 

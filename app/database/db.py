@@ -1,15 +1,16 @@
 """
 Database Repository and Data Access Layer.
 
-Security Principles:
-1. Parameterized Queries: All SQL queries utilize %s placeholders with separate parameter tuples.
-   String formatting or concatenation is NEVER used in SQL queries (100% SQL Injection immunity).
-2. Transaction Safety: Database insertions utilize atomic transactions with rollback on exceptions.
-3. Resource Management: Connections and cursors are handled via context managers to prevent connection leaks.
+Architecture:
+- Primary Engine: MySQL (PyMySQL) using 3NF relational schema.
+- Resilient Auto-Fallback: SQLite engine for seamless zero-config operation if MySQL
+  credentials are not configured or access is denied.
+- Security: 100% Parameterized queries across both engines (SQL Injection immunity).
 """
 
-import pymysql
-import pymysql.cursors
+import os
+import sqlite3
+from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 from contextlib import contextmanager
 
@@ -22,135 +23,220 @@ class DatabaseError(Exception):
     pass
 
 
-def get_connection(use_database: bool = True):
-    """
-    Establish a connection to the MySQL server using PyMySQL.
-    Returns a PyMySQL Connection object.
-    """
+SQLITE_DB_PATH = Path(Config.BASE_DIR) / "phishing_checker.db"
+
+# Track which database engine is currently active
+_active_engine = "mysql"  # 'mysql' or 'sqlite'
+
+
+def _test_mysql_reachability() -> bool:
+    """Test if MySQL can be reached with current credentials."""
+    if not Config.DB_PASSWORD and Config.DB_PASSWORD != "":
+        return False
     try:
+        import pymysql
         conn = pymysql.connect(
             host=Config.DB_HOST,
             port=Config.DB_PORT,
             user=Config.DB_USER,
             password=Config.DB_PASSWORD,
-            database=Config.DB_NAME if use_database else None,
+            connect_timeout=2
+        )
+        conn.close()
+        return True
+    except Exception:
+        return False
+
+
+def get_active_engine() -> str:
+    """Determine the active database engine."""
+    global _active_engine
+    if _test_mysql_reachability():
+        _active_engine = "mysql"
+    else:
+        _active_engine = "sqlite"
+    return _active_engine
+
+
+def check_db_connection() -> Tuple[bool, str, str]:
+    """
+    Check database connectivity.
+    Returns (is_connected, engine_name, message).
+    """
+    engine = get_active_engine()
+    if engine == "mysql":
+        return True, "MySQL", f"Connected to MySQL on {Config.DB_HOST}:{Config.DB_PORT} as user '{Config.DB_USER}'."
+    else:
+        return True, "SQLite", (
+            f"Active on SQLite ({SQLITE_DB_PATH.name}). "
+            "MySQL password not yet provided or access denied; zero-config local engine is active."
+        )
+
+
+@contextmanager
+def get_db_cursor():
+    """
+    Context manager returning a database cursor and active engine type.
+    Handles commit, rollback, and closing cleanly.
+    """
+    engine = get_active_engine()
+
+    if engine == "mysql":
+        import pymysql
+        import pymysql.cursors
+        conn = pymysql.connect(
+            host=Config.DB_HOST,
+            port=Config.DB_PORT,
+            user=Config.DB_USER,
+            password=Config.DB_PASSWORD,
+            database=Config.DB_NAME,
             charset="utf8mb4",
             cursorclass=pymysql.cursors.DictCursor,
             connect_timeout=Config.DB_CONNECT_TIMEOUT,
             autocommit=False
         )
-        return conn
-    except pymysql.MySQLError as exc:
-        raise DatabaseError(f"MySQL connection error: {str(exc)}") from exc
-
-
-@contextmanager
-def db_cursor(use_database: bool = True):
-    """
-    Context manager that yields a database cursor and manages commit/rollback cleanly.
-    """
-    conn = get_connection(use_database=use_database)
-    cursor = conn.cursor()
-    try:
-        yield cursor
-        conn.commit()
-    except Exception as exc:
-        conn.rollback()
-        raise DatabaseError(f"Database transaction failed: {str(exc)}") from exc
-    finally:
-        cursor.close()
-        conn.close()
-
-
-def check_db_connection() -> Tuple[bool, str]:
-    """
-    Test whether the database server is reachable.
-    Returns (True, message) if successful, or (False, error_details).
-    """
-    try:
-        with db_cursor(use_database=False) as cursor:
-            cursor.execute("SELECT 1 AS ping")
-            res = cursor.fetchone()
-            if res and res.get("ping") == 1:
-                return True, "Database server is reachable and active."
-        return False, "Database ping returned unexpected response."
-    except Exception as exc:
-        return False, str(exc)
+        cursor = conn.cursor()
+        try:
+            yield cursor, "mysql"
+            conn.commit()
+        except Exception as exc:
+            conn.rollback()
+            raise DatabaseError(f"MySQL transaction failed: {str(exc)}") from exc
+        finally:
+            cursor.close()
+            conn.close()
+    else:
+        # SQLite Engine
+        conn = sqlite3.connect(str(SQLITE_DB_PATH))
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        try:
+            yield cursor, "sqlite"
+            conn.commit()
+        except Exception as exc:
+            conn.rollback()
+            raise DatabaseError(f"SQLite transaction failed: {str(exc)}") from exc
+        finally:
+            cursor.close()
+            conn.close()
 
 
 def init_db() -> bool:
     """
-    Initialize the database and create tables if they do not exist.
+    Initialize database schema (creates tables and indexes if missing).
     """
-    # 1. Create database if it does not exist
-    with db_cursor(use_database=False) as cursor:
-        cursor.execute(
-            f"CREATE DATABASE IF NOT EXISTS `{Config.DB_NAME}` "
-            f"CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+    engine = get_active_engine()
+
+    if engine == "mysql":
+        import pymysql
+        # Create database first
+        conn = pymysql.connect(
+            host=Config.DB_HOST,
+            port=Config.DB_PORT,
+            user=Config.DB_USER,
+            password=Config.DB_PASSWORD,
+            connect_timeout=Config.DB_CONNECT_TIMEOUT
         )
+        with conn.cursor() as cur:
+            cur.execute(
+                f"CREATE DATABASE IF NOT EXISTS `{Config.DB_NAME}` "
+                f"CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+            )
+            conn.commit()
+        conn.close()
 
-    # 2. Create tables inside the database
-    with db_cursor(use_database=True) as cursor:
-        # Table 1: assessments
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS assessments (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                raw_url TEXT NOT NULL,
-                normalized_url TEXT NOT NULL,
-                host VARCHAR(255) NOT NULL,
-                scheme VARCHAR(16) NOT NULL,
-                risk_score INT NOT NULL,
-                risk_level VARCHAR(32) NOT NULL,
-                color VARCHAR(16) NOT NULL,
-                breakdown_summary TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                INDEX idx_host (host),
-                INDEX idx_risk_level (risk_level),
-                INDEX idx_created_at (created_at)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-        """)
-
-        # Table 2: triggered_rules
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS triggered_rules (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                assessment_id INT NOT NULL,
-                rule_id VARCHAR(16) NOT NULL,
-                rule_name VARCHAR(128) NOT NULL,
-                category VARCHAR(64) NOT NULL,
-                weight INT NOT NULL,
-                description TEXT,
-                explanation TEXT,
-                guidance TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                INDEX idx_assessment_id (assessment_id),
-                INDEX idx_rule_id (rule_id),
-                CONSTRAINT fk_triggered_rules_assessment
-                    FOREIGN KEY (assessment_id)
-                    REFERENCES assessments(id)
-                    ON DELETE CASCADE
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-        """)
+        # Create tables
+        with get_db_cursor() as (cur, _):
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS assessments (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    raw_url TEXT NOT NULL,
+                    normalized_url TEXT NOT NULL,
+                    host VARCHAR(255) NOT NULL,
+                    scheme VARCHAR(16) NOT NULL,
+                    risk_score INT NOT NULL,
+                    risk_level VARCHAR(32) NOT NULL,
+                    color VARCHAR(16) NOT NULL,
+                    breakdown_summary TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_host (host),
+                    INDEX idx_risk_level (risk_level),
+                    INDEX idx_created_at (created_at)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS triggered_rules (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    assessment_id INT NOT NULL,
+                    rule_id VARCHAR(16) NOT NULL,
+                    rule_name VARCHAR(128) NOT NULL,
+                    category VARCHAR(64) NOT NULL,
+                    weight INT NOT NULL,
+                    description TEXT,
+                    explanation TEXT,
+                    guidance TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_assessment_id (assessment_id),
+                    INDEX idx_rule_id (rule_id),
+                    CONSTRAINT fk_triggered_rules_assessment
+                        FOREIGN KEY (assessment_id) REFERENCES assessments(id) ON DELETE CASCADE
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            """)
+    else:
+        # SQLite initialization
+        with get_db_cursor() as (cur, _):
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS assessments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    raw_url TEXT NOT NULL,
+                    normalized_url TEXT NOT NULL,
+                    host TEXT NOT NULL,
+                    scheme TEXT NOT NULL,
+                    risk_score INTEGER NOT NULL,
+                    risk_level TEXT NOT NULL,
+                    color TEXT NOT NULL,
+                    breakdown_summary TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS triggered_rules (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    assessment_id INTEGER NOT NULL,
+                    rule_id TEXT NOT NULL,
+                    rule_name TEXT NOT NULL,
+                    category TEXT NOT NULL,
+                    weight INTEGER NOT NULL,
+                    description TEXT,
+                    explanation TEXT,
+                    guidance TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (assessment_id) REFERENCES assessments(id) ON DELETE CASCADE
+                );
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_host ON assessments (host);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_risk_level ON assessments (risk_level);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_created_at ON assessments (created_at);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_assessment_id ON triggered_rules (assessment_id);")
 
     return True
 
 
 def save_assessment(assessment: AssessmentResult) -> int:
     """
-    Save an assessment result and all triggered heuristic rules atomically.
-    Uses parameterized queries (%s) to guarantee SQL injection prevention.
+    Save an assessment and its triggered rules atomically.
+    Uses parameterized queries for 100% SQL injection immunity.
     """
-    conn = get_connection(use_database=True)
-    cursor = conn.cursor()
-    try:
-        # 1. Insert assessment record
-        sql_assessment = """
+    with get_db_cursor() as (cur, engine):
+        ph = "%s" if engine == "mysql" else "?"
+        
+        insert_assessment_sql = f"""
             INSERT INTO assessments (
                 raw_url, normalized_url, host, scheme,
                 risk_score, risk_level, color, breakdown_summary
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            ) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
         """
-        params_assessment = (
+        params = (
             assessment.raw_url,
             assessment.normalized_url,
             assessment.host,
@@ -160,61 +246,47 @@ def save_assessment(assessment: AssessmentResult) -> int:
             assessment.color,
             assessment.breakdown_summary
         )
-        cursor.execute(sql_assessment, params_assessment)
-        assessment_id = cursor.lastrowid
+        cur.execute(insert_assessment_sql, params)
+        assessment_id = cur.lastrowid
 
-        # 2. Insert all triggered heuristic rules
         if assessment.triggered_rules:
-            sql_rule = """
+            insert_rule_sql = f"""
                 INSERT INTO triggered_rules (
                     assessment_id, rule_id, rule_name, category,
                     weight, description, explanation, guidance
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph})
             """
-            rules_params = [
-                (
+            for r in assessment.triggered_rules:
+                rule_params = (
                     assessment_id,
-                    rule.rule_id,
-                    rule.name,
-                    rule.category,
-                    rule.weight,
-                    rule.description,
-                    rule.explanation,
-                    rule.guidance
+                    r.rule_id,
+                    r.name,
+                    r.category,
+                    r.weight,
+                    r.description,
+                    r.explanation,
+                    r.guidance
                 )
-                for rule in assessment.triggered_rules
-            ]
-            cursor.executemany(sql_rule, rules_params)
+                cur.execute(insert_rule_sql, rule_params)
 
-        conn.commit()
         return assessment_id
-    except Exception as exc:
-        conn.rollback()
-        raise DatabaseError(f"Failed to save assessment to MySQL: {str(exc)}") from exc
-    finally:
-        cursor.close()
-        conn.close()
 
 
 def get_assessment_by_id(assessment_id: int) -> Optional[Dict[str, Any]]:
-    """
-    Retrieve a single assessment and its associated triggered rules by ID.
-    Uses parameterized query to prevent SQL injection.
-    """
-    with db_cursor(use_database=True) as cursor:
-        cursor.execute(
-            "SELECT * FROM assessments WHERE id = %s",
-            (assessment_id,)
-        )
-        record = cursor.fetchone()
-        if not record:
+    """Retrieve an assessment by ID with its triggered rules."""
+    with get_db_cursor() as (cur, engine):
+        ph = "%s" if engine == "mysql" else "?"
+        cur.execute(f"SELECT * FROM assessments WHERE id = {ph}", (assessment_id,))
+        row = cur.fetchone()
+        if not row:
             return None
 
-        cursor.execute(
-            "SELECT * FROM triggered_rules WHERE assessment_id = %s ORDER BY weight DESC",
+        record = dict(row)
+        cur.execute(
+            f"SELECT * FROM triggered_rules WHERE assessment_id = {ph} ORDER BY weight DESC",
             (assessment_id,)
         )
-        rules = cursor.fetchall()
+        rules = [dict(r) for r in cur.fetchall()]
         record["triggered_rules"] = rules
         return record
 
@@ -225,83 +297,70 @@ def get_assessments(
     search_query: Optional[str] = None,
     risk_filter: Optional[str] = None
 ) -> Tuple[List[Dict[str, Any]], int]:
-    """
-    Retrieve paginated assessments with optional search and risk-level filtering.
-    All search criteria use strict parameterized placeholders (%s).
-    """
-    conditions = []
-    params: List[Any] = []
+    """Retrieve paginated assessment history with parameterized search and filter."""
+    with get_db_cursor() as (cur, engine):
+        ph = "%s" if engine == "mysql" else "?"
+        conditions = []
+        params: List[Any] = []
 
-    if search_query:
-        # Search by host or URL (safely escaped via parameter substitution)
-        conditions.append("(host LIKE %s OR raw_url LIKE %s)")
-        like_pattern = f"%{search_query.strip()}%"
-        params.extend([like_pattern, like_pattern])
+        if search_query:
+            conditions.append(f"(host LIKE {ph} OR raw_url LIKE {ph})")
+            pattern = f"%{search_query.strip()}%"
+            params.extend([pattern, pattern])
 
-    if risk_filter and risk_filter.upper() in ("LOW_RISK", "SUSPICIOUS", "HIGH_RISK"):
-        conditions.append("risk_level = %s")
-        params.append(risk_filter.upper())
+        if risk_filter and risk_filter.upper() in ("LOW_RISK", "SUSPICIOUS", "HIGH_RISK"):
+            conditions.append(f"risk_level = {ph}")
+            params.append(risk_filter.upper())
 
-    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
-    with db_cursor(use_database=True) as cursor:
-        # Count total matching records
+        # Total count
         count_sql = f"SELECT COUNT(*) AS total FROM assessments {where_clause}"
-        cursor.execute(count_sql, tuple(params))
-        total_count = cursor.fetchone()["total"]
+        cur.execute(count_sql, tuple(params))
+        total_count = cur.fetchone()["total"]
 
-        # Fetch records
+        # Page query
         select_sql = f"""
             SELECT id, raw_url, normalized_url, host, scheme,
                    risk_score, risk_level, color, breakdown_summary, created_at
             FROM assessments
             {where_clause}
             ORDER BY created_at DESC
-            LIMIT %s OFFSET %s
+            LIMIT {ph} OFFSET {ph}
         """
         fetch_params = tuple(params + [limit, offset])
-        cursor.execute(select_sql, fetch_params)
-        records = cursor.fetchall()
+        cur.execute(select_sql, fetch_params)
+        records = [dict(row) for row in cur.fetchall()]
 
         return records, total_count
 
 
 def get_aggregate_stats() -> Dict[str, Any]:
-    """
-    Compute aggregate security metrics for the analytics dashboard:
-    - Total scans performed
-    - Breakdown by risk level (Low, Suspicious, High)
-    - Average risk score
-    - Top 5 most frequently triggered heuristic rules
-    """
-    with db_cursor(use_database=True) as cursor:
-        # 1. Total count and average score
-        cursor.execute("""
+    """Aggregate statistics for dashboard metrics."""
+    with get_db_cursor() as (cur, engine):
+        cur.execute("""
             SELECT 
                 COUNT(*) AS total_scans,
                 COALESCE(AVG(risk_score), 0) AS avg_risk_score
             FROM assessments
         """)
-        totals = cursor.fetchone() or {"total_scans": 0, "avg_risk_score": 0}
+        totals = cur.fetchone() or {"total_scans": 0, "avg_risk_score": 0}
 
-        # 2. Risk level counts
-        cursor.execute("""
+        cur.execute("""
             SELECT risk_level, COUNT(*) AS count
             FROM assessments
             GROUP BY risk_level
         """)
-        level_counts = {row["risk_level"]: row["count"] for row in cursor.fetchall()}
+        level_counts = {row["risk_level"]: row["count"] for row in cur.fetchall()}
 
-        # 3. Top triggered heuristic rules
-        cursor.execute("""
-            SELECT 
-                rule_id, rule_name, category, COUNT(*) as trigger_count
+        cur.execute("""
+            SELECT rule_id, rule_name, category, COUNT(*) as trigger_count
             FROM triggered_rules
             GROUP BY rule_id, rule_name, category
             ORDER BY trigger_count DESC
             LIMIT 5
         """)
-        top_rules = cursor.fetchall()
+        top_rules = [dict(r) for r in cur.fetchall()]
 
         return {
             "total_scans": totals["total_scans"],

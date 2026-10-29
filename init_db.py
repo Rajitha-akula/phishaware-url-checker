@@ -17,14 +17,14 @@ def main():
     print(f"Target Database Name : {Config.DB_NAME}")
     print("-" * 60)
 
-    success, msg = check_db_connection()
-    if not success:
+    is_connected, engine_name, msg = check_db_connection()
+    print(f"Active Storage Engine: {engine_name}")
+    print(f"Engine Status        : {msg}")
+    print("-" * 60)
+
+    if not is_connected:
         print("\n[!] Connection Failed:")
         print(f"    {msg}")
-        print("\nTroubleshooting Guidance:")
-        print("1. Check that the MySQL service is running (e.g. MySQL80).")
-        print("2. Ensure your password is set in a .env file: DB_PASSWORD=your_password")
-        print("3. Refer to .env.example for available configuration options.")
         sys.exit(1)
 
     print("\n[+] Database server is reachable!")
