@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}Scan History - PhishAware URL Risk Checker{% endblock %}
+
+{% block content %}
+<div class="hero">
+    <h1>Assessment History & Audit Trail</h1>
+    <p>Review and filter all previously evaluated URLs stored securely with parameterized queries.</p>
+</div>
+
+<section class="card">
+    <!-- Search & Filter Controls -->
+    <div style="display: flex; gap: 1rem; justify-content: space-between; flex-wrap: wrap; margin-bottom: 1.5rem;">
+        <div style="flex: 1; min-width: 260px;">
+            <input 
+                type="text" 
+                id="history-search" 
+                class="url-input" 
+                placeholder="Search history by hostname or URL..."
+                style="padding: 0.65rem 1rem;"
+            >
+        </div>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <button type="button" class="sample-chip history-filter-btn active" data-filter="">All Scans</button>
+            <button type="button" class="sample-chip history-filter-btn" data-filter="LOW_RISK">Low Risk</button>
+            <button type="button" class="sample-chip history-filter-btn" data-filter="SUSPICIOUS">Suspicious</button>
+            <button type="button" class="sample-chip history-filter-btn" data-filter="HIGH_RISK">High Risk</button>
+        </div>
+    </div>
+
+    <!-- History Table -->
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Hostname</th>
+                    <th>Analyzed URL</th>
+                    <th>Risk Score</th>
+                    <th>Classification</th>
+                </tr>
+            </thead>
+            <tbody id="history-tbody">
+                <!-- Rows injected dynamically via main.js -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination Controls -->
+    <div class="pagination">
+        <div id="history-page-info">Loading records...</div>
+        <div style="display: flex; gap: 0.5rem;">
+            <button type="button" id="history-prev" class="btn" style="padding: 0.45rem 1rem; font-size: 0.85rem;" disabled>&larr; Previous</button>
+            <button type="button" id="history-next" class="btn" style="padding: 0.45rem 1rem; font-size: 0.85rem;" disabled>Next &rarr;</button>
+        </div>
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}Telemetry Statistics - PhishAware URL Risk Checker{% endblock %}
+
+{% block content %}
+<div class="hero">
+    <h1>Security Analytics & Telemetry</h1>
+    <p>Aggregate insights on analyzed URLs, risk tier distributions, and frequently triggered deception tactics.</p>
+</div>
+
+<!-- Metrics Cards -->
+<div class="metrics-grid">
+    <div class="metric-card">
+        <div class="metric-label">Total URLs Evaluated</div>
+        <div id="stat-total-scans" class="metric-value">0</div>
+        <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.35rem;">Lifetime scans recorded</div>
+    </div>
+
+    <div class="metric-card">
+        <div class="metric-label">Average Risk Score</div>
+        <div id="stat-avg-score" class="metric-value" style="color: #38bdf8;">0.0</div>
+        <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.35rem;">Out of 100 maximum risk</div>
+    </div>
+
+    <div class="metric-card">
+        <div class="metric-label">High Risk Flagged</div>
+        <div id="stat-high-count" class="metric-value" style="color: #ef4444;">0</div>
+        <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.35rem;">Score 60+ (Severe warning)</div>
+    </div>
+
+    <div class="metric-card">
+        <div class="metric-label">Active Storage Engine</div>
+        <div id="stat-db-engine" class="metric-value" style="font-size: 1.6rem; color: #10b981;">Loading...</div>
+        <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.35rem;">Parameterized SQL backend</div>
+    </div>
+</div>
+
+<!-- Risk Distribution Card -->
+<section class="card">
+    <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 0.5rem;">Risk Tier Breakdown</h3>
+    <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1rem;">
+        Proportional ratio of safe, suspicious, and high-risk URL assessments.
+    </p>
+
+    <div class="progress-bar-container">
+        <div id="bar-low" class="progress-segment" style="background: var(--risk-low); width: 0%;"></div>
+        <div id="bar-suspicious" class="progress-segment" style="background: var(--risk-suspicious); width: 0%;"></div>
+        <div id="bar-high" class="progress-segment" style="background: var(--risk-high); width: 0%;"></div>
+    </div>
+
+    <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; margin-top: 1rem; font-size: 0.88rem;">
+        <div><span style="color: var(--risk-low); font-weight: 700;">●</span> Low Risk: <strong id="stat-low-count">0</strong></div>
+        <div><span style="color: var(--risk-suspicious); font-weight: 700;">●</span> Suspicious: <strong id="stat-suspicious-count">0</strong></div>
+        <div><span style="color: var(--risk-high); font-weight: 700;">●</span> High Risk: <strong id="stat-high-count">0</strong></div>
+    </div>
+</section>
+
+<!-- Top Triggered Rules Leaderboard -->
+<section class="card">
+    <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 0.5rem;">Top 5 Most Triggered Heuristic Rules</h3>
+    <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1rem;">
+        Identifies which deceptive patterns cybercriminals or abnormal URLs employ most frequently in your audit records.
+    </p>
+
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Rule ID</th>
+                    <th>Rule Title</th>
+                    <th>Category</th>
+                    <th>Frequency</th>
+                </tr>
+            </thead>
+            <tbody id="top-rules-tbody">
+                <!-- Injected dynamically via main.js -->
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

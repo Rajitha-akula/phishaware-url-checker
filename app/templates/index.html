@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}URL Analyzer - PhishAware URL Risk Checker{% endblock %}
+
+{% block content %}
+<div class="hero">
+    <h1>Inspect URL Risk & Phishing Indicators</h1>
+    <p>Analyze web links using transparent, explainable heuristic rules. Learn how attackers disguise malicious links and practice safe browsing defense.</p>
+</div>
+
+<!-- Primary URL Input Card -->
+<section class="card">
+    <form id="analyze-form" class="search-form">
+        <div class="input-wrapper">
+            <input 
+                type="text" 
+                id="url-input" 
+                class="url-input" 
+                placeholder="Paste or type a URL to inspect (e.g., https://example.com/login)..." 
+                autocomplete="off"
+                required
+            >
+        </div>
+        <button type="submit" id="submit-btn" class="btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            Analyze URL
+        </button>
+    </form>
+
+    <!-- Synthetic Quick Test Chips -->
+    <div class="quick-samples">
+        <span>Try Interactive Test Cases:</span>
+        <button type="button" class="sample-chip" data-sample="https://en.wikipedia.org/wiki/Computer_security">✓ Benign Wikipedia</button>
+        <button type="button" class="sample-chip" data-sample="https://paypal.com@verify-account-portal.xyz/login">⚠️ Credential '@' Trick</button>
+        <button type="button" class="sample-chip" data-sample="http://198.51.100.42/banking/login">⚠️ Raw IP Hostname</button>
+        <button type="button" class="sample-chip" data-sample="http://login.verify.paypal.com.attacker-gate.top/">⚠️ Chained Subdomain Spoof</button>
+        <button type="button" class="sample-chip" data-sample="http://2130706433/update">⚠️ Dword IP Obfuscation</button>
+    </div>
+
+    <!-- Error Alert Box -->
+    <div id="error-container" class="disclaimer-banner warning hidden" style="margin-top: 1.25rem;"></div>
+</section>
+
+<!-- Assessment Results Section (Initially Hidden) -->
+<section id="result-container" class="card hidden">
+    <!-- Header with Risk Gauge -->
+    <div class="result-header">
+        <div class="risk-gauge-container">
+            <div id="result-circle" class="risk-circle">
+                <span id="result-score" class="score-number">0</span>
+                <span class="score-max">/ 100</span>
+            </div>
+            <div>
+                <div id="result-badge" class="risk-badge">LOW RISK</div>
+                <div id="result-summary" class="result-summary-text">Summary text here...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mandatory Educational Disclaimer -->
+    <div class="disclaimer-banner">
+        <svg class="disclaimer-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <div id="result-disclaimer-text">
+            Educational Disclaimer: This assessment is based exclusively on static, transparent heuristic pattern analysis of the URL structure. It DOES NOT visit the destination website, resolve DNS records, or inspect live server content. Consequently, heuristic results ARE NOT DEFINITIVE PROOF that a URL is safe or malicious. Always exercise vigilance and verify domains independently before submitting credentials.
+        </div>
+    </div>
+
+    <!-- Normalized URL Breakdown Grid -->
+    <h3 style="font-size: 1.05rem; font-weight: 700; margin-bottom: 0.75rem;">Deconstructed URL Components</h3>
+    <div class="url-breakdown-grid">
+        <div class="breakdown-item">
+            <div class="breakdown-label">Scheme Protocol</div>
+            <div id="bd-scheme" class="breakdown-value">https</div>
+        </div>
+        <div class="breakdown-item">
+            <div class="breakdown-label">Identified Host</div>
+            <div id="bd-host" class="breakdown-value">example.com</div>
+        </div>
+        <div class="breakdown-item" style="grid-column: 1 / -1;">
+            <div class="breakdown-label">Normalized Full Address</div>
+            <div id="bd-url" class="breakdown-value">https://example.com/</div>
+        </div>
+    </div>
+
+    <!-- Heuristic Rules Breakdown -->
+    <h3 style="font-size: 1.05rem; font-weight: 700; margin: 1.5rem 0 0.75rem 0;">Heuristic Rule Indicators & Safety Guidance</h3>
+    
+    <div id="rules-empty" class="disclaimer-banner hidden" style="border-left-color: var(--risk-low);">
+        <span>✅ <strong>No Suspicious Structural Indicators Flagged:</strong> The syntactic structure of this URL does not trigger any of our 13 heuristic warning signs. Always verify the domain name yourself before entering sensitive data.</span>
+    </div>
+
+    <div id="rules-list" class="rules-list">
+        <!-- Rendered dynamically by main.js -->
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block title %}Educational Guide & Phishing Defense - PhishAware{% endblock %}
+
+{% block content %}
+<div class="hero">
+    <h1>Phishing Defense & Heuristics Guide</h1>
+    <p>Understand how modern phishing links deceive victims, explore our 13 heuristic rules, and test your phishing detection skills.</p>
+</div>
+
+<!-- Safe Browsing Rules Card -->
+<section class="card">
+    <h2 style="font-size: 1.3rem; font-weight: 700; margin-bottom: 0.75rem;">🛡️ Essential Rules for Safe Browsing</h2>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem; margin-top: 1rem;">
+        <div class="rule-card">
+            <h3 style="font-size: 1rem; color: #38bdf8; margin-bottom: 0.35rem;">1. Read Domains from Right to Left</h3>
+            <p style="font-size: 0.88rem; color: #cbd5e1;">
+                Attackers place trusted brand names at the start of a link (e.g. <code>paypal.com.verify-user.xyz</code>). Always locate the root domain just before the first single forward slash <code>/</code>.
+            </p>
+        </div>
+        <div class="rule-card">
+            <h3 style="font-size: 1rem; color: #38bdf8; margin-bottom: 0.35rem;">2. Watch for the '@' Symbol</h3>
+            <p style="font-size: 0.88rem; color: #cbd5e1;">
+                The <code>@</code> symbol treats everything to its left as a username. <code>https://google.com@phishing.com</code> takes you straight to <code>phishing.com</code>!
+            </p>
+        </div>
+        <div class="rule-card">
+            <h3 style="font-size: 1rem; color: #38bdf8; margin-bottom: 0.35rem;">3. Raw IP Addresses are Red Flags</h3>
+            <p style="font-size: 0.88rem; color: #cbd5e1;">
+                Legitimate commercial websites almost never ask users to sign in on raw numerical addresses like <code>http://192.0.2.1/login</code>.
+            </p>
+        </div>
+        <div class="rule-card">
+            <h3 style="font-size: 1rem; color: #38bdf8; margin-bottom: 0.35rem;">4. Type URLs Manually or Use Bookmarks</h3>
+            <p style="font-size: 0.88rem; color: #cbd5e1;">
+                Never click sensitive links received via unexpected emails or SMS text messages. Navigate to banking or portal sites through saved bookmarks.
+            </p>
+        </div>
+    </div>
+</section>
+
+<!-- Interactive Phishing IQ Quiz -->
+<section class="card">
+    <h2 style="font-size: 1.3rem; font-weight: 700; margin-bottom: 0.5rem;">🧠 Test Your Phishing IQ</h2>
+    <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1.5rem;">
+        Answer these quick real-world scenarios to see if you can spot deceptive URLs.
+    </p>
+
+    <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+        <!-- Question 1 -->
+        <div class="rule-card" id="quiz-q1">
+            <p style="font-weight: 600; font-size: 0.95rem; margin-bottom: 0.75rem;">
+                Question 1: You receive an urgent email from "PayPal Support" with the link: <br>
+                <code style="color: #f59e0b;">https://paypal.com@account-security-update.xyz/login</code>. Where does your browser go?
+            </p>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                <button type="button" class="btn" style="padding: 0.5rem 1rem; font-size: 0.85rem;" onclick="checkQuiz('q1', false)">A) paypal.com</button>
+                <button type="button" class="btn" style="padding: 0.5rem 1rem; font-size: 0.85rem;" onclick="checkQuiz('q1', true)">B) account-security-update.xyz</button>
+            </div>
+            <div id="quiz-q1-feedback" class="hidden" style="margin-top: 0.75rem; font-size: 0.88rem;"></div>
+        </div>
+
+        <!-- Question 2 -->
+        <div class="rule-card" id="quiz-q2">
+            <p style="font-weight: 600; font-size: 0.95rem; margin-bottom: 0.75rem;">
+                Question 2: Does an HTTPS padlock icon alone guarantee that a website is NOT a phishing site?
+            </p>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                <button type="button" class="btn" style="padding: 0.5rem 1rem; font-size: 0.85rem;" onclick="checkQuiz('q2', false)">A) Yes, HTTPS means the site is verified safe.</button>
+                <button type="button" class="btn" style="padding: 0.5rem 1rem; font-size: 0.85rem;" onclick="checkQuiz('q2', true)">B) No, HTTPS only encrypts traffic. Phishing sites also use free SSL certificates.</button>
+            </div>
+            <div id="quiz-q2-feedback" class="hidden" style="margin-top: 0.75rem; font-size: 0.88rem;"></div>
+        </div>
+    </div>
+</section>
+
+<!-- Full Heuristics Catalog -->
+<section class="card">
+    <h2 style="font-size: 1.3rem; font-weight: 700; margin-bottom: 0.5rem;">📋 Transparent Heuristic Rules Catalog</h2>
+    <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1.5rem;">
+        Detailed technical breakdown of each rule evaluated by our static analysis engine.
+    </p>
+
+    <div class="rules-list">
+        {% for rule in rules %}
+        <div class="rule-card">
+            <div class="rule-header">
+                <div class="rule-title-group">
+                    <span class="rule-id-pill">{{ rule.rule_id }}</span>
+                    <span class="rule-name">{{ rule.name }}</span>
+                    <span style="font-size: 0.78rem; color: #94a3b8; background: #131b2e; padding: 0.2rem 0.5rem; border-radius: 4px;">{{ rule.category }}</span>
+                </div>
+                <span class="rule-weight-badge">+{{ rule.weight }} Risk Points</span>
+            </div>
+            <div class="rule-section">
+                <div class="rule-section-label">Indicator Summary</div>
+                <div class="rule-explanation">{{ rule.description }}</div>
+            </div>
+            <div class="rule-section">
+                <div class="rule-section-label">Attacker Tactics & Context</div>
+                <div class="rule-explanation">{{ rule.explanation }}</div>
+            </div>
+            <div class="rule-guidance-box">
+                💡 <strong>Safety Recommendation:</strong> {{ rule.guidance }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts_extra %}
+<script>
+function checkQuiz(q, isCorrect) {
+    const feedbackElem = document.getElementById(`quiz-${q}-feedback`);
+    if (!feedbackElem) return;
+
+    if (isCorrect) {
+        feedbackElem.className = "rule-guidance-box";
+        feedbackElem.innerHTML = "✅ <strong>Correct!</strong> Great eye for cybersecurity defense.";
+    } else {
+        feedbackElem.className = "disclaimer-banner warning";
+        feedbackElem.innerHTML = "❌ <strong>Incorrect.</strong> Remember: Attackers deliberately exploit address bar parsing rules or obtain free SSL certificates to build convincing traps.";
+    }
+    feedbackElem.classList.remove("hidden");
+}
+</script>
+{% endblock %}

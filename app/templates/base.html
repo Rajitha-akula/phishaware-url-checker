@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>{% block title %}Phishing Awareness & URL Risk Checker{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    {% block head_extra %}{% endblock %}
+</head>
+<body>
+    <!-- Top Navigation Bar -->
+    <header class="navbar">
+        <div class="nav-container">
+            <a href="{{ url_for('views.index_view') }}" class="nav-brand">
+                <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    <path d="m9 12 2 2 4-4"/>
+                </svg>
+                <span>PhishAware <span style="font-weight: 400; color: #38bdf8;">URL Guard</span></span>
+                <span class="nav-badge">Educational</span>
+            </a>
+            <nav>
+                <ul class="nav-links">
+                    <li><a href="{{ url_for('views.index_view') }}" class="nav-link {% if request.path == '/' %}active{% endif %}">Analyzer</a></li>
+                    <li><a href="{{ url_for('views.history_view') }}" class="nav-link {% if request.path == '/history' %}active{% endif %}">Scan History</a></li>
+                    <li><a href="{{ url_for('views.stats_view') }}" class="nav-link {% if request.path == '/stats' %}active{% endif %}">Telemetry Stats</a></li>
+                    <li><a href="{{ url_for('views.education_view') }}" class="nav-link {% if request.path == '/education' %}active{% endif %}">Phishing Guide</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main View Content -->
+    <main class="main-content">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Secure Footer -->
+    <footer class="footer">
+        <div class="footer-container">
+            <p><strong>PhishAware & URL Risk Checker</strong> — Built with Python, Flask, MySQL, and Modern Defense-in-Depth Web Standards.</p>
+            <p style="margin-top: 0.35rem; font-size: 0.8rem; color: #64748b;">
+                Zero Outbound Requests Protocol Active &bull; Structural Heuristic Analysis &bull; Parameterized SQL Protected
+            </p>
+        </div>
+    </footer>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    {% block scripts_extra %}{% endblock %}
+</body>
+</html>
